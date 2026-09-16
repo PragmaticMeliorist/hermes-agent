@@ -15,7 +15,12 @@ export interface OnboardingRecommendation {
   setupAction: 'install' | 'enable' | null
 }
 
-const words = (text: string): string => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ')
+const words = (text: string): string =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .join(' ')
 
 /** Rank evidence, not a fixed list of products. The model personalizes these reviewed outcomes later. */
 export function onboardingRecommendations(
@@ -32,7 +37,9 @@ export function onboardingRecommendations(
       return []
     }
 
-    const terms = [entry.name, ...(entry.suggest?.keywords ?? []), ...(entry.suggest?.applications ?? [])].map(words).filter(Boolean)
+    const terms = [entry.name, ...(entry.suggest?.keywords ?? []), ...(entry.suggest?.applications ?? [])]
+      .map(words)
+      .filter(Boolean)
     const preferred = terms.some(term => selected.has(term))
     const topical = terms.some(term => subject.includes(` ${term} `))
     const detectedApps = entry.detected_apps ?? []
@@ -64,11 +71,15 @@ export function onboardingRecommendations(
     return [{ recommendation, topical, preferred, configured, detected: detectedApps.length > 0 }]
   })
 
-  return candidates.sort((a, b) =>
-    Number(b.topical) - Number(a.topical)
-    || Number(b.preferred) - Number(a.preferred)
-    || Number(b.configured) - Number(a.configured)
-    || Number(b.detected) - Number(a.detected)
-    || a.recommendation.name.localeCompare(b.recommendation.name)
-  ).slice(0, 6).map(candidate => candidate.recommendation)
+  return candidates
+    .sort(
+      (a, b) =>
+        Number(b.topical) - Number(a.topical) ||
+        Number(b.preferred) - Number(a.preferred) ||
+        Number(b.configured) - Number(a.configured) ||
+        Number(b.detected) - Number(a.detected) ||
+        a.recommendation.name.localeCompare(b.recommendation.name)
+    )
+    .slice(0, 6)
+    .map(candidate => candidate.recommendation)
 }

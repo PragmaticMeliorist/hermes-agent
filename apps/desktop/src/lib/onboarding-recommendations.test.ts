@@ -14,11 +14,30 @@ it('keeps new enabled managed apps searchable without disturbing the curated lea
 
 function entry(name: string, patch: Partial<McpCatalogEntry> = {}): McpCatalogEntry {
   return {
-    name, description: `${name} integration`, source: 'https://example.test', transport: 'stdio',
-    auth_type: 'none', required_env: [], command: 'example', args: [], url: null, install_url: null,
-    install_ref: null, bootstrap: [], default_enabled: null, post_install: 'Enable the app integration.',
-    needs_install: false, installed: false, enabled: false,
-    suggest: { keywords: [name], hosts: [], applications: [name], examples: [`Make something in ${name}`], requires_app: true },
+    name,
+    description: `${name} integration`,
+    source: 'https://example.test',
+    transport: 'stdio',
+    auth_type: 'none',
+    required_env: [],
+    command: 'example',
+    args: [],
+    url: null,
+    install_url: null,
+    install_ref: null,
+    bootstrap: [],
+    default_enabled: null,
+    post_install: 'Enable the app integration.',
+    needs_install: false,
+    installed: false,
+    enabled: false,
+    suggest: {
+      keywords: [name],
+      hosts: [],
+      applications: [name],
+      examples: [`Make something in ${name}`],
+      requires_app: true
+    },
     ...patch
   }
 }
@@ -39,7 +58,11 @@ it('recommends catalog entries from evidence and intent, never from installation
   expect(suggestions.every(row => row.examples.length === 1)).toBe(true)
   expect(onboardingRecommendations(rows, { context: 'Use future studio' })[0].examples).toContain(longerExample)
   expect(suggestions.map(row => row.readiness)).not.toContain('connected')
-  expect(suggestions.find(row => row.name === local.name)).toMatchObject({ readiness: 'setup_required', detectedApps: ['Modeler'], setupAction: 'install' })
+  expect(suggestions.find(row => row.name === local.name)).toMatchObject({
+    readiness: 'setup_required',
+    detectedApps: ['Modeler'],
+    setupAction: 'install'
+  })
   expect(suggestions.find(row => row.name === configured.name)?.setupAction).toBeNull()
   expect(onboardingRecommendations(rows, { context: 'Use paused studio' })[0].setupAction).toBe('enable')
   expect(suggestions.find(row => row.name === configured.name)?.readiness).toBe('configured_unverified')
