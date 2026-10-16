@@ -1603,6 +1603,60 @@ class TestMentionGating:
         assert adapter._dispatched == []
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("opening", ["@David Recorded a reference book", "@David Ask V about the reference book"])
+    async def test_repository_owner_url_does_not_dispatch(self, adapter, opening):
+        # The only recipient is another member; a repository owner is data, not an address.
+        adapter._self_pubkey = "d" * 64
+        adapter._self_npub = hex_to_npub(adapter._self_pubkey)
+        adapter._display_name = "Helper"
+        content = f"{opening} <buzz://pr?id=example&owner={adapter._self_pubkey}&d=example-skills>"
+        event = _event("e1", content=content, created_at=10)
+        event["tags"].append(["p", OTHER_PUBKEY])
+        await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
+        assert adapter._dispatched == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("identity", ["@Helper", "hex", "npub"])
+    @pytest.mark.parametrize("template", [
+        "https://example.test/{identity}",
+        "buzz://pr?id=example&owner={identity}&d=skills",
+        "[repository](https://example.test/{identity})",
+        "> {identity} please help\nAnother member's quotation.",
+        "`{identity}`", "``{identity}``", "```text\n{identity}\n```",
+        "~~~text\n{identity}\n~~~", 'They said "{identity} please help".',
+        "They said ‘{identity} please help’.",
+    ])
+    async def test_mention_in_data_does_not_dispatch(self, adapter, identity, template):
+        adapter._self_pubkey = "d" * 64
+        adapter._self_npub = hex_to_npub(adapter._self_pubkey)
+        adapter._display_name = "Helper"
+        identity = {"hex": adapter._self_pubkey, "npub": adapter._self_npub}.get(identity, identity)
+        event = _event("e1", content=template.format(identity=identity), created_at=10)
+        await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
+        assert adapter._dispatched == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("address", ["@Chip", SELF_PUBKEY, SELF_NPUB])
+    async def test_real_address_alongside_data_dispatches_unchanged(self, adapter, address):
+        content = f"See `@Chip` and https://example.test/{SELF_PUBKEY}\nPlease check, {address}!"
+        event = _event("e1", content=content, created_at=10)
+        await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
+        assert [d["text"] for d in adapter._dispatched] == [content]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", ["p-tag", "dm", "reply"])
+    async def test_structural_address_with_only_quoted_mention_dispatches(self, adapter, route):
+        state = adapter._channel_state[CHANNEL] = adapter._new_channel_state("dm" if route == "dm" else "group")
+        event = _event("e1", content="`@Chip`", created_at=10)
+        if route == "p-tag":
+            event["tags"].append(["p", SELF_PUBKEY])
+        elif route == "reply":
+            adapter._remember_event_meta(CHANNEL, "parent", SELF_PUBKEY, "prompt")
+            event["tags"].append(["e", "parent", "", "reply"])
+        await adapter._handle_event(CHANNEL, state, event)
+        assert [d["text"] for d in adapter._dispatched] == ["`@Chip`"]
+
+    @pytest.mark.asyncio
     async def test_signed_recipient_tag_dispatches_without_text_mention(self, adapter):
         event = _event("e1", content="please take a look", created_at=10)
         event["tags"].append(["p", SELF_PUBKEY])

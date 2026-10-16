@@ -264,6 +264,31 @@ class TestSendRecovery:
         assert ["--mention", FIZZ_PUBKEY] == sends[0][0][-2:]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("content", [
+        "https://example.test/@Fizz", "buzz://pr?owner=@Fizz",
+        "`@Fizz`", "``@Fizz``", "```text\n@Fizz\n```", "~~~text\n@Fizz\n~~~",
+        "> @Fizz please help\nA quotation.", 'They said "@Fizz please help".',
+        "They said ‘@Fizz please help’.",
+    ])
+    async def test_data_mentions_are_not_attached_to_publish(self, content):
+        adapter, cli = self._sending_adapter()
+        cli.script("messages", "send", {"accepted": True, "event_id": "e1"})
+        result = await adapter.send(CHANNEL, content)
+        assert result.success
+        sends = self._send_calls(cli)
+        assert len(sends) == 1
+        assert "--mention" not in sends[0][0]
+        assert sends[0][1] == content
+
+    @pytest.mark.asyncio
+    async def test_real_mention_beside_data_is_attached_to_publish(self):
+        adapter, cli = self._sending_adapter()
+        cli.script("messages", "send", {"accepted": True, "event_id": "e1"})
+        result = await adapter.send(CHANNEL, "`@Fizz` https://example.test/@Fizz\nPlease help @Fizz!")
+        assert result.success
+        assert self._send_calls(cli)[0][0][-2:] == ["--mention", FIZZ_PUBKEY]
+
+    @pytest.mark.asyncio
     async def test_non_member_mention_retries_without_mentions(self):
         adapter, cli = self._sending_adapter()
         cli.script(

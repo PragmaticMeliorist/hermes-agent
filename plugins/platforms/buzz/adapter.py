@@ -67,6 +67,7 @@ from gateway.platforms.base import (
 from gateway.platforms.helpers import cancel_task
 from gateway.platforms.event import MessageEvent, MessageType
 from gateway.config import Platform
+from plugins.platforms.buzz.mentions import addressing_text, is_mentioned
 
 
 _CHAT_KIND = 9  # ``messages get`` also returns housekeeping kinds, never dispatched
@@ -748,7 +749,8 @@ class BuzzAdapter(BasePlatformAdapter):
         """Resolve ``@Name`` tokens to member pubkeys so genuine mentions notify while @-prose stays text.
         Word-bounded ("email@Fizz", "@@Fizz", "@FizzBuzz" don't wake Fizz; "@Riley!!" does); longer names
         match first and consume their span; ambiguous names tag nobody."""
-        if "@" not in content:
+        text = addressing_text(content)
+        if "@" not in text:
             return []
         by_name: Dict[str, List[str]] = {}
         display: Dict[str, str] = {}
@@ -765,7 +767,6 @@ class BuzzAdapter(BasePlatformAdapter):
                 pks.append(pk)
             display.setdefault(key, name)
         found: List[str] = []
-        text = content
         for key in sorted(by_name, key=len, reverse=True):
             pattern = re.compile(r"(?<![\w@])@" + re.escape(display[key]) + r"(?!\w)", re.IGNORECASE)
             if pattern.search(text):
@@ -1584,16 +1585,8 @@ class BuzzAdapter(BasePlatformAdapter):
         logger.info("Buzz: conversation %s reclassified as DM (message p-tagged to self)", channel_id)
 
     def _is_mentioned(self, content: str) -> bool:
-        """True when text explicitly addresses this agent (npub, hex, or @name)."""
-        lowered = content.lower()
-        patterns = []
-        if self._self_pubkey and _HEX64_RE.fullmatch(self._self_pubkey):
-            patterns.append(rf"(?<![0-9a-f]){re.escape(self._self_pubkey)}(?![0-9a-f])")
-        if self._self_npub:
-            patterns.append(rf"(?<![a-z0-9]){re.escape(self._self_npub.lower())}(?![a-z0-9])")
-        if self._display_name:
-            patterns.append(rf"(?<![\w@])@{re.escape(self._display_name.lower())}" + r"(?=$|[\s,;.!?:)\]}])")
-        return any(re.search(p, lowered) for p in patterns)
+        """True when prose explicitly addresses this agent, not a URL/quote/code reference."""
+        return is_mentioned(content, self._self_pubkey, self._self_npub, self._display_name)
 
     def _is_addressed(self, event: dict) -> bool:
         """True when a group event carries an explicit text or p-tag address."""
